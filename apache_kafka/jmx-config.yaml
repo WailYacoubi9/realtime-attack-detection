@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jmx-kafka-config
+  namespace: default
+data:
+  kafka.yml: |
+    lowercaseOutputName: true
+    lowercaseOutputLabelNames: true
+    rules:
+      # Messages In per second
+      - pattern: kafka.server<type=BrokerTopicMetrics, name=MessagesInPerSec><>Count
+        name: kafka_messages_in_total
+        type: COUNTER
+        help: "Total messages received by broker"
+      
+      # Bytes In/Out
+      - pattern: kafka.server<type=BrokerTopicMetrics, name=(BytesInPerSec|BytesOutPerSec)><>Count
+        name: kafka_bytes_$1_total
+        type: COUNTER
+        help: "Total bytes in/out"
+      
+      # Under-replicated partitions (CRITICAL)
+      - pattern: kafka.server<type=ReplicaManager, name=UnderReplicatedPartitions><>Value
+        name: kafka_under_replicated_partitions
+        type: GAUGE
+        help: "Number of under-replicated partitions"
+      
+      # Partition count
+      - pattern: kafka.server<type=ReplicaManager, name=PartitionCount><>Value
+        name: kafka_partition_count
+        type: GAUGE
+        help: "Number of partitions on this broker"
+      
+      # Leader count
+      - pattern: kafka.server<type=ReplicaManager, name=LeaderCount><>Value
+        name: kafka_leader_count
+        type: GAUGE
+        help: "Number of leader partitions"
+      
+      # Request latency (50th, 95th, 99th percentile)
+      - pattern: kafka.network<type=RequestMetrics, name=TotalTimeMs, request=(\w+)><>(Mean|50thPercentile|95thPercentile|99thPercentile)
+        name: kafka_request_time_ms
+        labels:
+          request: "$1"
+          quantile: "$2"
+        type: GAUGE
+        help: "Request latency in milliseconds"

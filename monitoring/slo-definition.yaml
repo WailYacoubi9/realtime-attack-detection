@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slo-definitions
+  namespace: monitoring
+data:
+  slo.yaml: |
+    slos:
+      availability:
+        target: 99.9%
+        window: 30d
+        measurement: avg_over_time(up{job="kafka-broker"}[30d]) * 100
+        error_budget: 0.1%
+      
+      latency_p99:
+        target: 500ms
+        window: 5m
+        measurement: histogram_quantile(0.99, rate(message_processing_duration_seconds_bucket[5m])) * 1000
+      
+      throughput:
+        target: 1000
+        window: 5m
+        measurement: rate(kafka_server_brokertopicmetrics_messagesin_total[5m])
+      
+      error_rate:
+        target: 0.1%
+        window: 5m
+        measurement: (rate(producer_messages_failed_total[5m]) / rate(producer_messages_sent_total[5m])) * 100

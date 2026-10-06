@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka-controller
+spec:
+  serviceName: "kafka-controller-service"
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: kafka-controller
+
+  template:
+    metadata:
+      labels:
+        app: kafka-controller
+    spec:
+      containers:
+        - name: controller
+          image: apache/kafka:3.8.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash","-c"]
+          args:
+            - |
+              set -e
+              CLUSTER_ID="laA2BR9-So-1wGxQEMI_EQ"  # même pour tout le cluster
+
+              # Ordinal = 0/1/2 d'après le nom du Pod, ex: kafka-controller-0
+              ORDINAL=$(echo ${HOSTNAME} | awk -F- '{print $NF}')
+              NODE_ID=${ORDINAL}  # <== IMPORTANT: 0,1,2 pour matcher quorum.voters
+
+              echo "My ordinal is ${ORDINAL}, so NODE_ID=${NODE_ID}"
+
+              # 1) Config du contrôleur
+              cat > /var/lib/kafka/data/controller.properties <<EOF
+              process.roles=controller
+              node.id=${NODE_ID}
+
+              log.dirs=/var/lib/kafka/data
+
+              controller.listener.names=CONTROLLER
+              controller.quorum.voters=0@kafka-controller-0.kafka-controller-service.default.svc.cluster.local:9093,1@kafka-controller-1.kafka-controller-service.default.svc.cluster.local:9093,2@kafka-controller-2.kafka-controller-service.default.svc.cluster.local:9093
+
+              listeners=CONTROLLER://:9093
+              listener.security.protocol.map=CONTROLLER:PLAINTEXT
+              EOF
+
+              # 2) Formatage du stockage si nécessaire
+              if [ ! -f /var/lib/kafka/data/meta.properties ]; then
+                echo "Formatting storage with CLUSTER_ID=${CLUSTER_ID} and NODE_ID=${NODE_ID}"
+                /opt/kafka/bin/kafka-storage.sh format \
+                  --cluster-id ${CLUSTER_ID} \
+                  --config /var/lib/kafka/data/controller.properties \
+                  --ignore-formatted
+              else
+                echo "meta.properties already exists, skip format"
+              fi
+
+              echo "Resulting meta.properties:"
+              cat /var/lib/kafka/data/meta.properties || true
+              echo "Starting controller using generated config"
+              exec /opt/kafka/bin/kafka-server-start.sh /var/lib/kafka/data/controller.properties
+
+          ports:
+            - containerPort: 9093
+              name: controller
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+
+          volumeMounts:
+            - name: controller-data
+              mountPath: /var/lib/kafka/data
+
+  # Define PVC for the controller
+  volumeClaimTemplates:
+    - metadata:
+        name: controller-data
+        labels:
+          app: kafka-controller
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-controller-service
+spec:
+  clusterIP: None
+  selector:
+    app: kafka-controller
+  ports:
+    - name: controller
+      port: 9093
+      targetPort: 9093
+      protocol: TCP  # headless service pour DNS par Pod

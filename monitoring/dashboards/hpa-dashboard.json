@@ -1,0 +1,91 @@
+{
+  "title": "HPA & System Monitoring",
+  "uid": "hpa-system-001",
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "BOX Pods Running",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [{
+        "expr": "count(kube_pod_status_phase{namespace=\"default\",phase=\"Running\"})",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 10, "color": "green"}
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 2,
+      "title": "LIGHTNING Spark Workers - Current Replicas",
+      "type": "stat",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "targets": [{
+        "expr": "kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler=\"spark-worker-hpa\"}",
+        "refId": "A"
+      }],
+      "options": {
+        "colorMode": "value",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 10,
+      "title": "CHART Spark Workers Scaling",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler=\"spark-worker-hpa\"}",
+          "legendFormat": "Current",
+          "refId": "A"
+        },
+        {
+          "expr": "kube_horizontalpodautoscaler_status_desired_replicas{horizontalpodautoscaler=\"spark-worker-hpa\"}",
+          "legendFormat": "Desired",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2
+          }
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "FIRE Spark Workers CPU %",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "targets": [{
+        "expr": "avg(rate(container_cpu_usage_seconds_total{namespace=\"default\",pod=~\"spark-worker.*\"}[5m])) * 100",
+        "legendFormat": "CPU %",
+        "refId": "A"
+      }]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

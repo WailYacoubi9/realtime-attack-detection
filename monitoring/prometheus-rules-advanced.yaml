@@ -1,0 +1,51 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sre-alerts-advanced
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: slo-violations
+    interval: 30s
+    rules:
+    - alert: SLOAvailabilityViolation
+      expr: avg_over_time(up{job="kafka-broker"}[5m]) < 0.999
+      for: 2m
+      labels:
+        severity: critical
+        component: kafka
+      annotations:
+        summary: "🚨 SLO Availability violated"
+        description: "Availability: {{ $value | humanizePercentage }}. Target: 99.9%"
+    
+    - alert: KafkaUnderReplicatedPartitions
+      expr: sum(kafka_server_replicamanager_underreplicatedpartitions) > 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "🔴 Kafka under-replicated partitions"
+        description: "{{ $value }} partitions at risk"
+    
+    - alert: HPAMaxReplicasReached
+      expr: |
+        kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler="spark-worker-hpa"}
+        ==
+        kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler="spark-worker-hpa"}
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "⚠️ HPA at max replicas"
+        description: "Consider scaling limits"
+    
+    - alert: HighCPUThrottling
+      expr: rate(container_cpu_cfs_throttled_seconds_total{pod=~"spark-worker.*"}[5m]) > 0.3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "⚠️ CPU throttling detected"
+        description: "Pod {{ $labels.pod }} throttled"
